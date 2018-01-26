@@ -1,29 +1,41 @@
 import pprint
-import tensorflow as tf
+import argparse
 
 from preprocess import load_data
 
 pp = pprint.PrettyPrinter()
 
 # 参数配置
-flags = tf.app.flags
-flags.DEFINE_integer("edim", 300, "internal state dimension [300]")
-flags.DEFINE_integer("lindim", 75, "linear part of the state [75]")
-flags.DEFINE_integer("nhop", 7, "number of hops [7]")
-flags.DEFINE_integer("batch_size", 128, "batch size to use during training [128]")
-flags.DEFINE_integer("nepoch", 100, "number of epoch to use during training [100]")
-flags.DEFINE_float("init_lr", 0.01, "initial learning rate [0.01]")
-flags.DEFINE_float("init_hid", 0.1, "initial internal state value [0.1]")
-flags.DEFINE_float("init_std", 0.05, "weight initialization std [0.05]")
-flags.DEFINE_float("max_grad_norm", 50, "clip gradients to this norm [50]")
-flags.DEFINE_string("pretrain_file", "data/glove.6B.300d.txt",
-                    "pre-trained glove vectors file path [../data/glove.6B.300d.txt]")
-flags.DEFINE_string("train_data_path", "data/Laptop_Train_v2.xml",
-                    "train gold data set path [./data/Laptop_Train_v2.xml]")
-flags.DEFINE_string("test_data_path", "data/Laptops_Test_Gold.xml",
-                    "test gold data set path [./data/Laptops_Test_Gold.xml]")
-flags.DEFINE_boolean("show", False, "print progress [False]")
-FLAGS = flags.FLAGS
+parser = argparse.ArgumentParser()
+parser.add_argument('--dataset', dest='dataset', type=str, metavar='<str>', default='Restaurants',
+                    help="Dataset (Laptop/Restaurants) (default=Restaurants)")
+parser.add_argument("--mode", dest="mode", type=str, metavar='<str>', default='term',
+                    help="Experiment Mode (term|aspect) (default=term)")
+parser.add_argument("--mdl", dest="model_type", type=str, metavar='<str>', default='RNN',
+                    help="(RNN|TD-RNN|ATT-RNN)")
+parser.add_argument("--rnn_type", dest="rnn_type", type=str, metavar='<str>', default='LSTM',
+                    help="Recurrent unit type (RNN|LSTM|GRU) (default=LSTM)")
+args = parser.parse_args()
+
+
+# flags = tf.app.flags
+# flags.DEFINE_integer("edim", 300, "internal state dimension [300]")
+# flags.DEFINE_integer("lindim", 75, "linear part of the state [75]")
+# flags.DEFINE_integer("nhop", 7, "number of hops [7]")
+# flags.DEFINE_integer("batch_size", 128, "batch size to use during training [128]")
+# flags.DEFINE_integer("nepoch", 100, "number of epoch to use during training [100]")
+# flags.DEFINE_float("init_lr", 0.01, "initial learning rate [0.01]")
+# flags.DEFINE_float("init_hid", 0.1, "initial internal state value [0.1]")
+# flags.DEFINE_float("init_std", 0.05, "weight initialization std [0.05]")
+# flags.DEFINE_float("max_grad_norm", 50, "clip gradients to this norm [50]")
+# flags.DEFINE_string("pretrain_file", "data/glove.6B.300d.txt",
+#                     "pre-trained glove vectors file path [../data/glove.6B.300d.txt]")
+# flags.DEFINE_string("train_data_path", "data/Laptop_Train_v2.xml",
+#                     "train gold data set path [./data/Laptop_Train_v2.xml]")
+# flags.DEFINE_string("test_data_path", "data/Laptops_Test_Gold.xml",
+#                     "test gold data set path [./data/Laptops_Test_Gold.xml]")
+# flags.DEFINE_boolean("show", False, "print progress [False]")
+# FLAGS = flags.FLAGS
 
 
 def init_word_embeddings(word2idx):
@@ -37,12 +49,8 @@ def init_word_embeddings(word2idx):
     return wt
 
 
-def main(_):
-    source_count, target_count = [], []
-    source_word2idx, target_word2idx = {}, {}
+def main():
 
-    train_data = load_data(FLAGS.train_data_path, source_count, source_word2idx, target_count, target_word2idx)
-    test_data = load_data(FLAGS.test_data_path, source_count, source_word2idx, target_count, target_word2idx)
 
     FLAGS.pad_idx = source_word2idx['<pad>']
     FLAGS.nwords = len(source_word2idx)
@@ -57,4 +65,4 @@ def main(_):
 
 
 if __name__ == '__main__':
-    tf.app.run()
+    main()
