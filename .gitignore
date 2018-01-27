@@ -1,3 +1,4 @@
 data/glove*.txt
+preprocess
 .idea/
 *.pyc

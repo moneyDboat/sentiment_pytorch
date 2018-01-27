@@ -3,6 +3,7 @@ from collections import Counter
 from past.builtins import xrange
 import xml.etree.ElementTree as ET
 import argparse
+import json
 import numpy as np
 import pickle
 
@@ -12,28 +13,121 @@ parser.add_argument('--dataset', dest='dataset', type=str, metavar='<str>', defa
                     help="Dataset (Laptop/Restaurants) (default=Restaurants)")
 args = parser.parse_args()
 
+labels = {'negative': 0, 'neutral': 1, 'positive': 2}
+
+file_path = './preprocess/{}/'.format(args.dataset)
+if os.path.isdir(file_path):
+    pass
+else:
+    os.makedirs(file_path + 'train/')
+    os.makedirs(file_path + 'test/')
+
 
 def main():
-    source_count, target_count = [], []
-    source_word2idx, target_word2idx = {}, {}
     train_data_path = 'data/{}_Train.xml'.format(args.dataset)
     test_data_path = 'data/{}_Test.xml'.format(args.dataset)
 
-    # return source_data, source_loc_data, target_data, target_label, max_sent_len
-    train_data, train_loc, train_aspect, train_y = load_data(train_data_path, source_count, source_word2idx,
-                                                             target_count, target_word2idx)
-    test_data, test_loc, test_aspect, train_y = load_data(test_data_path, source_count, source_word2idx, target_count,
-                                                          target_word2idx)
+    source_word2idx, target_word2idx = build_voca(train_data_path, test_data_path)
+    train_data = load_data(train_data_path, 'train', source_word2idx, target_word2idx)
+    test_data = load_data(test_data_path, 'test', source_word2idx, target_word2idx)
 
-    file_path = './preprocess/{}/'.format(args.dataset)
-    np.savetxt(file_path + 'train/sentences_data.txt', train_data)
-    np.savetxt(file_path + 'train/loctions.txt', train_loc)
-    np.savetxt(file_path + 'train/aspects', train_aspect)
-    np.savetxt(file_path + 'train/labels.txt', train_y)
-    np.savetxt(file_path + 'test/sentences_data.txt', test_data)
-    np.savetxt(file_path + 'test/loctions.txt', test_loc)
-    np.savetxt(file_path + 'test/aspects', test_aspect)
-    np.savetxt(file_path + 'test/labels.txt', test_y)
+    # 保存预处理数据
+    pickle.dump(train_data, open(file_path + 'train_data.pkl', 'wb'))
+    pickle.dump(test_data, open(file_path + 'test_data.pkl', 'wb'))
+
+
+# 构建词典
+def build_voca(*fpaths):
+    source_count, target_count = [], []
+    source_word2idx, target_word2idx = {}, {}
+    source_words, target_words = [], []
+    source_count.append(['<pad>', 0])
+
+    for fpath in fpaths:
+        if os.path.isfile(fpath) is False:
+            raise ("[!] Data %s not found" % fpath)
+        print('<--loading data file {}-->'.format(fpath))
+
+        # ElementTree解析XML
+        tree = ET.parse(fpath)
+        root = tree.getroot()
+
+        # context_words, aspect_words
+        for sentence in root:
+            text = sentence.find('text').text.lower()
+            source_words.extend(text.split())
+            for asp_terms in sentence.iter('aspectTerms'):
+                for asp_term in asp_terms.findall('aspectTerm'):
+                    target_words.append(asp_term.get('term').lower())
+
+    # Counter计数，most_common根据计数进行排序
+    source_count.extend(Counter(source_words).most_common())
+    target_count.extend(Counter(target_words).most_common())
+
+    # 单词转换成索引，word2index
+    # 最常出现的词会在前面
+    for word, _ in source_count:
+        if word not in source_word2idx:
+            source_word2idx[word] = len(source_word2idx)
+    for word, _ in target_count:
+        if word not in target_word2idx:
+            target_word2idx[word] = len(target_word2idx)
+
+    # 写入文件
+    with open(file_path + 'source_w2i.txt', 'wt') as f:
+        for key, val in source_word2idx.items():
+            f.write('\"{}\" : {}\n'.format(key, val))
+    with open(file_path + 'target_w2i.txt', 'wt') as f:
+        for key, val in target_word2idx.items():
+            f.write('\"{}\" : {}\n'.format(key, val))
+
+    return source_word2idx, target_word2idx
+
+
+# 读取数据集，target代表aspect
+def load_data(fpath, data_type, source_word2idx, target_word2idx):
+    if os.path.isfile(fpath) is False:
+        raise ("[!] Data %s not found" % fpath)
+
+    # ElementTree解析XML
+    tree = ET.parse(fpath)
+    root = tree.getroot()
+
+    raw_sentence = []
+    all_data = {}
+    source_data, loc_data, target_data, target_label = [], [], [], []
+    for sentence in root:
+        text = sentence.find('text').text.lower()
+        if len(text.strip()) != 0:
+            raw_sentence.append(text)
+            sentence_idx = []
+            for word in text.split():
+                sentence_idx.append(source_word2idx[word])  # sentence转变成word indexs列表
+
+            for asp_terms in sentence.iter('aspectTerms'):
+                for asp_term in asp_terms.findall('aspectTerm'):
+                    source_data.append(sentence_idx)
+                    # 提取postion information和aspect label
+                    pos_info, label = _get_data_tuple(text, int(asp_term.get('from')),
+                                                      int(asp_term.get('to')), asp_term.get('polarity'))
+                    loc_data.append(pos_info)
+                    target_data.append(target_word2idx[asp_term.get('term').lower()])
+                    target_label.append(label)
+
+    # 写入文件
+    print("<--Read %s aspects from %s-->" % (len(source_data), fpath))
+    save_path = file_path + data_type
+    with open(save_path + '/raw_sentence.txt', 'w') as f:
+        for item in raw_sentence:
+            f.write(item + '\n')
+    np.savetxt(save_path + '/aspects.txt', np.array(target_data), fmt='%i')
+    np.savetxt(save_path + '/labels.txt', np.array(target_label), fmt='%i')
+
+    all_data['source'] = source_data
+    all_data['location'] = loc_data
+    all_data['target'] = target_data
+    all_data['label'] = target_label
+    return all_data
 
 
 def _get_abs_pos(cur, ids):
@@ -74,7 +168,7 @@ def _check_if_ranges_overlap(x1, x2, y1, y2):
 # 提取postion information和aspect label
 # 这部分代码没有仔细看，但已经知道输出是什么样的了
 # pos_info形式类似[5,4,3,2,1,0,1,2,3,4,5]
-def _get_data_tuple(text, asp_term, fro, to, label, word2idx):
+def _get_data_tuple(text, fro, to, label):
     words = text.split()
     # Find the ids of aspect term
     ids, st, i = [], _count_pre_spaces(text), 0
@@ -84,72 +178,11 @@ def _get_data_tuple(text, asp_term, fro, to, label, word2idx):
         st = st + len(word) + _count_mid_spaces(text, st + len(word))
         i = i + 1
     pos_info, i = [], 0
-    for word in words:
+    for _ in words:
         pos_info.append(_get_abs_pos(i, ids))
         i = i + 1
-    lab = None
-    if label == 'negative':
-        lab = 0
-    elif label == 'neutral':
-        lab = 1
-    else:
-        lab = 2
-    return pos_info, lab
 
-
-# 读取数据集，target代表aspect
-def load_data(fname, source_count, source_word2idx, target_count, target_word2idx):
-    if os.path.isfile(fname) is False:
-        raise ("[!] Data %s not found" % fname)
-
-    # ElementTree解析XML
-    tree = ET.parse(fname)
-    root = tree.getroot()
-
-    # context_words, aspect_words
-    source_words, target_words, max_sent_len = [], [], 0
-    for sentence in root:
-        text = sentence.find('text').text.lower()
-        source_words.extend(text.split())
-        # if len(text.split()) > max_sent_len:
-        #     max_sent_len = len(text.split())
-        for asp_terms in sentence.iter('aspectTerms'):
-            for asp_term in asp_terms.findall('aspectTerm'):
-                target_words.append(asp_term.get('term').lower())
-
-    if len(source_count) == 0:
-        source_count.append(['<pad>', 0])
-    source_count.extend(Counter(source_words).most_common())  # Counter计数，most_common根据计数进行排序
-    target_count.extend(Counter(target_words).most_common())
-
-    # 单词转换成索引，word2index
-    for word, _ in source_count:
-        if word not in source_word2idx:
-            source_word2idx[word] = len(source_word2idx)
-    for word, _ in target_count:
-        if word not in target_word2idx:
-            target_word2idx[word] = len(target_word2idx)
-
-    source_data, source_loc_data, target_data, target_label = [], [], [], []
-    for sentence in root:
-        text = sentence.find('text').text.lower()
-        if len(text.strip()) != 0:
-            sentence_idx = []
-            for word in text.split():
-                sentence_idx.append(source_word2idx[word])  # sentence转变成word indexs列表
-            for asp_terms in sentence.iter('aspectTerms'):
-                for asp_term in asp_terms.findall('aspectTerm'):
-                    source_data.append(sentence_idx)
-                    # 提取postion information和aspect label
-                    pos_info, label = _get_data_tuple(text, asp_term.get('term').lower(), int(asp_term.get('from')),
-                                                      int(asp_term.get('to')), asp_term.get('polarity'),
-                                                      source_word2idx)
-                    source_loc_data.append(pos_info)
-                    target_data.append(target_word2idx[asp_term.get('term').lower()])
-                    target_label.append(label)
-
-    print("Read %s aspects from %s" % (len(source_data), fname))
-    return np.array(source_data), np.array(source_loc_data), np.array(target_data), np.array(target_label)
+    return pos_info, labels[label]
 
 
 if __name__ == '__main__':
