@@ -6,21 +6,25 @@ import argparse
 import json
 import numpy as np
 import pickle
+from models.data_model import SentiData
+import util
+import shutil
 
 # 参数配置
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', dest='dataset', type=str, metavar='<str>', default='Restaurants',
-                    help="Dataset (Laptop/Restaurants) (default=Restaurants)")
+                    help='Dataset (Laptop/Restaurants) (default=Restaurants)')
+parser.add_argument('--glove', dest='glove', type=str, default='data/glove.6B.300d.txt',
+                    help='glove path')
 args = parser.parse_args()
 
 labels = {'negative': 0, 'neutral': 1, 'positive': 2}
 
-file_path = './preprocess/{}/'.format(args.dataset)
+file_path = 'preprocess/{}/'.format(args.dataset)
 if os.path.isdir(file_path):
-    pass
-else:
-    os.makedirs(file_path + 'train/')
-    os.makedirs(file_path + 'test/')
+    shutil.rmtree(file_path)
+os.makedirs(file_path + 'train/')
+os.makedirs(file_path + 'test/')
 
 
 def main():
@@ -32,8 +36,12 @@ def main():
     test_data = load_data(test_data_path, 'test', source_word2idx, target_word2idx)
 
     # 保存预处理数据
-    pickle.dump(train_data, open(file_path + 'train_data.pkl', 'wb'))
-    pickle.dump(test_data, open(file_path + 'test_data.pkl', 'wb'))
+    preprocess_data = dict()
+    preprocess_data['train'] = train_data
+    preprocess_data['test'] = test_data
+    preprocess_data['source_w2i'] = source_word2idx
+    preprocess_data['target_w2i'] = target_word2idx
+    pickle.dump(preprocess_data, open(file_path + 'data.pkl', 'wb'))
 
 
 # 构建词典
@@ -106,16 +114,20 @@ def load_data(fpath, data_type, source_word2idx, target_word2idx):
 
             for asp_terms in sentence.iter('aspectTerms'):
                 for asp_term in asp_terms.findall('aspectTerm'):
+                    labe = asp_term.get('polarity')
+                    if labe == 'conflict':
+                        continue
                     source_data.append(sentence_idx)
                     # 提取postion information和aspect label
                     pos_info, label = _get_data_tuple(text, int(asp_term.get('from')),
-                                                      int(asp_term.get('to')), asp_term.get('polarity'))
+                                                      int(asp_term.get('to')), labe)
                     loc_data.append(pos_info)
                     target_data.append(target_word2idx[asp_term.get('term').lower()])
                     target_label.append(label)
 
     # 写入文件
     print("<--Read %s aspects from %s-->" % (len(source_data), fpath))
+    source_data = util.pad_to_batch_max(source_data)
     save_path = file_path + data_type
     with open(save_path + '/raw_sentence.txt', 'w') as f:
         for item in raw_sentence:
@@ -123,10 +135,7 @@ def load_data(fpath, data_type, source_word2idx, target_word2idx):
     np.savetxt(save_path + '/aspects.txt', np.array(target_data), fmt='%i')
     np.savetxt(save_path + '/labels.txt', np.array(target_label), fmt='%i')
 
-    all_data['source'] = source_data
-    all_data['location'] = loc_data
-    all_data['target'] = target_data
-    all_data['label'] = target_label
+    all_data = SentiData(source_data, loc_data, target_data, target_label)
     return all_data
 
 

@@ -1,67 +1,62 @@
-import pprint
+import pickle
 import argparse
-
-from preprocess import load_data
-
-pp = pprint.PrettyPrinter()
+from models.rnn import BasicRNN
+import numpy as np
+from tqdm import tqdm
 
 # 参数配置
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', dest='dataset', type=str, metavar='<str>', default='Restaurants',
                     help="Dataset (Laptop/Restaurants) (default=Restaurants)")
+parser.add_argument('--glove', dest='glove', type=str, default='data/glove.6B.300d.txt',
+                    help='glove path')
 parser.add_argument("--mode", dest="mode", type=str, metavar='<str>', default='term',
                     help="Experiment Mode (term|aspect) (default=term)")
 parser.add_argument("--mdl", dest="model_type", type=str, metavar='<str>', default='RNN',
                     help="(RNN|TD-RNN|ATT-RNN)")
+parser.add_argument("--opt", dest="opt", type=str, metavar='<str>', default='Adam',
+                    help="Optimization algorithm (rmsprop|sgd|adagrad|adadelta|adam|adamax) (default=rmsprop)")
+parser.add_argument("--lr", dest='learn_rate', type=float, metavar='<float>', default=0.001,
+                    help="Learning Rate")
 parser.add_argument("--rnn_type", dest="rnn_type", type=str, metavar='<str>', default='LSTM',
                     help="Recurrent unit type (RNN|LSTM|GRU) (default=LSTM)")
+parser.add_argument("--rnn_size", dest="rnn_size", type=int, metavar='<int>', default=300,
+                    help="RNN dimension. '0' means no RNN layer (default=300)")
+parser.add_argument("--rnn_layers", dest="rnn_layers", type=int, metavar='<int>', default=1,
+                    help="Number of RNN layers")
+parser.add_argument("--emb_size", dest="embedding_size", type=int, metavar='<int>', default=300,
+                    help="Embeddings dimension (default=50)")
+parser.add_argument("--batch_size", dest="batch_size", type=int, metavar='<int>', default=256,
+                    help="Batch size (default=256)")
+parser.add_argument("--pretrained", dest="pretrained", type=int, metavar='<int>', default=1,
+                    help="Whether to use pretrained or not")
+
+parser.add_argument('--cuda', action='store_true', help='use CUDA')
+parser.add_argument('--gpu', dest='gpu', type=int, metavar='<int>', default=0,
+                    help="Specify which GPU to use (default=0)")
+parser.add_argument('--seed', type=int, default=1111, help='random seed')
 args = parser.parse_args()
 
 
-# flags = tf.app.flags
-# flags.DEFINE_integer("edim", 300, "internal state dimension [300]")
-# flags.DEFINE_integer("lindim", 75, "linear part of the state [75]")
-# flags.DEFINE_integer("nhop", 7, "number of hops [7]")
-# flags.DEFINE_integer("batch_size", 128, "batch size to use during training [128]")
-# flags.DEFINE_integer("nepoch", 100, "number of epoch to use during training [100]")
-# flags.DEFINE_float("init_lr", 0.01, "initial learning rate [0.01]")
-# flags.DEFINE_float("init_hid", 0.1, "initial internal state value [0.1]")
-# flags.DEFINE_float("init_std", 0.05, "weight initialization std [0.05]")
-# flags.DEFINE_float("max_grad_norm", 50, "clip gradients to this norm [50]")
-# flags.DEFINE_string("pretrain_file", "data/glove.6B.300d.txt",
-#                     "pre-trained glove vectors file path [../data/glove.6B.300d.txt]")
-# flags.DEFINE_string("train_data_path", "data/Laptop_Train_v2.xml",
-#                     "train gold data set path [./data/Laptop_Train_v2.xml]")
-# flags.DEFINE_string("test_data_path", "data/Laptops_Test_Gold.xml",
-#                     "test gold data set path [./data/Laptops_Test_Gold.xml]")
-# flags.DEFINE_boolean("show", False, "print progress [False]")
-# FLAGS = flags.FLAGS
-
-
 def init_word_embeddings(word2idx):
-    import numpy as np
-    wt = np.random.normal(0, FLAGS.init_std, [len(word2idx), FLAGS.edim])
-    with open(FLAGS.pretrain_file, 'r') as f:
-        for line in f:
+    weight = np.random.normal(0, 0.05, [len(word2idx), args.emb_size])
+    print('<--loading pre-trained word vectors...-->')
+    with open(args.glove, 'r') as f:
+        lines = f.readlines()
+        for line in tqdm(lines):
             content = line.strip().split()
             if content[0] in word2idx:
-                wt[word2idx[content[0]]] = np.array(list(map(float, content[1:])))
-    return wt
+                weight[word2idx[content[0]]] = np.array(list(map(float, content[1:])))
+    return weight
 
 
 def main():
+    data = pickle.load(open('preprocess/data.pkl', 'rb'))
+    source_w2i, target_w2i, train, test = data['source_w2i'], data['target_w2i'], data['train'], data['test']
+    train['source']
+    glove_weight = init_word_embeddings(data['source_w2i'])
 
-
-    FLAGS.pad_idx = source_word2idx['<pad>']
-    FLAGS.nwords = len(source_word2idx)
-    FLAGS.mem_size = train_data[4] if train_data[4] > test_data[4] else test_data[4]
-
-    pp.pprint(flags.FLAGS.__flags)
-
-    print('loading pre-trained word vectors...')
-    FLAGS.pre_trained_context_wt = init_word_embeddings(source_word2idx)
-    FLAGS.pre_trained_target_wt = init_word_embeddings(target_word2idx)
-    print('word embedding over!')
+    model = BasicRNN(args, len(source_w2i), pretrained=glove_weight)
 
 
 if __name__ == '__main__':
