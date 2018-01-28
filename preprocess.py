@@ -9,6 +9,7 @@ import pickle
 from models.data_model import SentiData
 import util
 import shutil
+from tqdm import tqdm
 
 # 参数配置
 parser = argparse.ArgumentParser()
@@ -16,6 +17,8 @@ parser.add_argument('--dataset', dest='dataset', type=str, metavar='<str>', defa
                     help='Dataset (Laptop/Restaurants) (default=Restaurants)')
 parser.add_argument('--glove', dest='glove', type=str, default='data/glove.6B.300d.txt',
                     help='glove path')
+parser.add_argument("--emb_size", dest="emb_size", type=int, metavar='<int>', default=300,
+                    help="Embeddings dimension (default=300)")
 args = parser.parse_args()
 
 labels = {'negative': 0, 'neutral': 1, 'positive': 2}
@@ -35,14 +38,27 @@ def main():
     train_data = load_data(train_data_path, 'train', source_word2idx, target_word2idx)
     test_data = load_data(test_data_path, 'test', source_word2idx, target_word2idx)
 
+    embeddings = init_word_embeddings(source_word2idx)
     # 保存预处理数据
     preprocess_data = dict()
+    preprocess_data['embedding'] = embeddings
     preprocess_data['train'] = train_data
     preprocess_data['test'] = test_data
     preprocess_data['source_w2i'] = source_word2idx
     preprocess_data['target_w2i'] = target_word2idx
     pickle.dump(preprocess_data, open(file_path + 'data.pkl', 'wb'))
 
+
+def init_word_embeddings(word2idx):
+    weight = np.random.normal(0, 0.05, [len(word2idx), args.emb_size])
+    print('<--loading pre-trained word vectors...-->')
+    with open(args.glove, 'r') as f:
+        lines = f.readlines()
+        for line in tqdm(lines):
+            content = line.strip().split()
+            if content[0] in word2idx:
+                weight[word2idx[content[0]]] = np.array(list(map(float, content[1:])))
+    return weight
 
 # 构建词典
 def build_voca(*fpaths):
@@ -128,12 +144,13 @@ def load_data(fpath, data_type, source_word2idx, target_word2idx):
     # 写入文件
     print("<--Read %s aspects from %s-->" % (len(source_data), fpath))
     source_data = util.pad_to_batch_max(source_data)
+    target_data, target_label = np.array(target_data, dtype=int), np.array(target_label, dtype=int)
     save_path = file_path + data_type
     with open(save_path + '/raw_sentence.txt', 'w') as f:
         for item in raw_sentence:
             f.write(item + '\n')
-    np.savetxt(save_path + '/aspects.txt', np.array(target_data), fmt='%i')
-    np.savetxt(save_path + '/labels.txt', np.array(target_label), fmt='%i')
+    np.savetxt(save_path + '/aspects.txt', target_data, fmt='%i')
+    np.savetxt(save_path + '/labels.txt', target_label, fmt='%i')
 
     all_data = SentiData(source_data, loc_data, target_data, target_label)
     return all_data
