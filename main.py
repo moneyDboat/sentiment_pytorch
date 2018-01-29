@@ -39,7 +39,7 @@ parser.add_argument("--pretrained", dest="pretrained", type=int, metavar='<int>'
                     help="Whether to use pretrained or not")
 
 parser.add_argument('--cuda', action='store_true', default=True, help='use CUDA')
-parser.add_argument("--epochs", dest="epochs", type=int, metavar='<int>', default=50,
+parser.add_argument("--epochs", dest="epochs", type=int, metavar='<int>', default=100,
                     help="Number of epochs (default=50)")
 parser.add_argument('--gpu', dest='gpu', type=int, metavar='<int>', default=0,
                     help="Specify which GPU to use (default=0)")
@@ -141,6 +141,7 @@ def select_optimizer():
     return op
 
 
+args.dataset = 'sentihood'
 data = pickle.load(open('preprocess/{}/data.pkl'.format(args.dataset), 'rb'))
 source_w2i, target_w2i, train_data, test_data, glove_weight = data['source_w2i'], data['target_w2i'], \
                                                               data['train'], data['test'], data['embedding']

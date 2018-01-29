@@ -30,25 +30,6 @@ os.makedirs(file_path + 'train/')
 os.makedirs(file_path + 'test/')
 
 
-def main():
-    train_data_path = 'data/{}_Train.xml'.format(args.dataset)
-    test_data_path = 'data/{}_Test.xml'.format(args.dataset)
-
-    source_word2idx, target_word2idx = build_voca(train_data_path, test_data_path)
-    train_data = load_data(train_data_path, 'train', source_word2idx, target_word2idx)
-    test_data = load_data(test_data_path, 'test', source_word2idx, target_word2idx)
-
-    embeddings = init_word_embeddings(source_word2idx)
-    # 保存预处理数据
-    preprocess_data = dict()
-    preprocess_data['embedding'] = embeddings
-    preprocess_data['train'] = train_data
-    preprocess_data['test'] = test_data
-    preprocess_data['source_w2i'] = source_word2idx
-    preprocess_data['target_w2i'] = target_word2idx
-    pickle.dump(preprocess_data, open(file_path + 'data.pkl', 'wb'))
-
-
 def init_word_embeddings(word2idx):
     weight = np.random.normal(0, 0.05, [len(word2idx), args.emb_size])
     print('<--loading pre-trained word vectors...-->')
@@ -59,6 +40,7 @@ def init_word_embeddings(word2idx):
             if content[0] in word2idx:
                 weight[word2idx[content[0]]] = np.array(list(map(float, content[1:])))
     return weight
+
 
 # 构建词典
 def build_voca(*fpaths):
@@ -143,7 +125,7 @@ def load_data(fpath, data_type, source_word2idx, target_word2idx):
 
     # 写入文件
     print("<--Read %s aspects from %s-->" % (len(source_data), fpath))
-    source_data = util.pad_to_batch_max(source_data)
+    source_data = pad_to_batch_max(source_data)
     target_data, target_label = np.array(target_data, dtype=int), np.array(target_label, dtype=int)
     save_path = file_path + data_type
     with open(save_path + '/raw_sentence.txt', 'w') as f:
@@ -154,6 +136,17 @@ def load_data(fpath, data_type, source_word2idx, target_word2idx):
 
     all_data = SentiData(source_data, loc_data, target_data, target_label)
     return all_data
+
+
+def pad_to_batch_max(data):
+    max_len = max([len(item) for item in data], )
+    pad_data = np.zeros([len(data), max_len], dtype=int)
+
+    for i in range(len(data)):
+        for j in range(len(data[i])):
+            pad_data[i][j] = data[i][j]
+
+    return pad_data
 
 
 def _get_abs_pos(cur, ids):
@@ -211,5 +204,19 @@ def _get_data_tuple(text, fro, to, label):
     return pos_info, labels[label]
 
 
-if __name__ == '__main__':
-    main()
+train_data_path = 'data/{}_Train.xml'.format(args.dataset)
+test_data_path = 'data/{}_Test.xml'.format(args.dataset)
+
+source_word2idx, target_word2idx = build_voca(train_data_path, test_data_path)
+train_data = load_data(train_data_path, 'train', source_word2idx, target_word2idx)
+test_data = load_data(test_data_path, 'test', source_word2idx, target_word2idx)
+
+embeddings = init_word_embeddings(source_word2idx)
+# 保存预处理数据
+preprocess_data = dict()
+preprocess_data['embedding'] = embeddings
+preprocess_data['train'] = train_data
+preprocess_data['test'] = test_data
+preprocess_data['source_w2i'] = source_word2idx
+preprocess_data['target_w2i'] = target_word2idx
+pickle.dump(preprocess_data, open(file_path + 'data.pkl', 'wb'))
