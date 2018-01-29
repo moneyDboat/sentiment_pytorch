@@ -1,13 +1,7 @@
 import torch
 import torch.nn as nn
-import time
-import random
 from torch.autograd import Variable
 import numpy as np
-import torch.optim as optim
-import util
-from collections import Counter
-from sklearn.metrics import accuracy_score
 
 
 class BasicRNN(nn.Module):

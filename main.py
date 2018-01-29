@@ -1,9 +1,7 @@
 import pickle
 import argparse
 from collections import Counter
-import random
 from sklearn.metrics import accuracy_score
-
 from models.rnn import BasicRNN
 import torch
 from torch.autograd import Variable
@@ -38,11 +36,11 @@ parser.add_argument("--pretrained", dest="pretrained", type=int, metavar='<int>'
                     help="Whether to use pretrained or not")
 
 parser.add_argument('--cuda', action='store_true', default=True, help='use CUDA')
-parser.add_argument("--epochs", dest="epochs", type=int, metavar='<int>', default=100,
+parser.add_argument("--epochs", dest="epochs", type=int, metavar='<int>', default=50,
                     help="Number of epochs (default=50)")
 parser.add_argument('--gpu', dest='gpu', type=int, metavar='<int>', default=0,
                     help="Specify which GPU to use (default=0)")
-parser.add_argument('--seed', type=int, default=1111, help='random seed')
+parser.add_argument('--seed', type=int, default=7777, help='random seed')
 args = parser.parse_args()
 
 
@@ -54,7 +52,6 @@ def train(data):
     for epoch in range(1, args.epochs + 1):
         t0 = time.clock()
         # random.shuffle(data)
-        print("========================================================================")
         losses = []
 
         for i in range(num_batches):
@@ -66,7 +63,8 @@ def train(data):
 
         t1 = time.clock()
         mean_loss = np.mean(losses)
-        print("[Epoch {}] Train Loss={} T={}s".format(epoch, mean_loss, t1 - t0))
+        if epoch % 5 == 0:
+            print("[Epoch {}] Train Loss={} T={}s".format(epoch, mean_loss, t1 - t0))
 
 
 def train_batch(data, i):
@@ -158,17 +156,23 @@ data = pickle.load(open('preprocess/{}/data.pkl'.format(args.dataset), 'rb'))
 source_w2i, source_w2i, train_data, test_data, glove_weight = data['source_w2i'], data['source_w2i'], \
                                                               data['train'], data['test'], data['embedding']
 
-# Set the random seed manually for reproducibility.
-torch.manual_seed(args.seed)
-model = BasicRNN(args, len(source_w2i), pretrained=glove_weight)
-print(model)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
-    model.cuda()
-np.random.seed(args.seed)
-random.seed(args.seed)
-criterion = nn.CrossEntropyLoss()
-optimizer = select_optimizer()
+acc_list = []
+t1 = time.clock()
+for i in range(10):
+    # Set the random seed manually for reproducibility.
+    print('\n\n<--{} Model start!!!-->'.format(i))
+    torch.manual_seed(args.seed + i)
+    model = BasicRNN(args, len(source_w2i), pretrained=glove_weight)
+    print(model)
+    if args.cuda:
+        model.cuda()
 
-train(train_data)
-acc = evaluate(test_data)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = select_optimizer()
+
+    train(train_data)
+    acc_list.append(evaluate(test_data))
+t2 = time.clock()
+print('\n\n<--Totla training time : {}s-->'.format(t2 - t1))
+print(acc_list)
+print(np.mean(acc_list))
