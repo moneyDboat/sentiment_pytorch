@@ -28,7 +28,7 @@ parser.add_argument("--rnn_size", dest="rnn_size", type=int, metavar='<int>', de
                     help="RNN dimension. '0' means no RNN layer (default=300)")
 parser.add_argument("--rnn_layers", dest="rnn_layers", type=int, metavar='<int>', default=1,
                     help="Number of RNN layers")
-parser.add_argument("--emb_size", dest="emb_size", type=int, metavar='<int>', default=300,
+parser.add_argument("--emb_size", dest="emb_size", type=int, metavar='<int>', default=50,
                     help="Embeddings dimension (default=300)")
 parser.add_argument("--batch_size", dest="batch_size", type=int, metavar='<int>', default=256,
                     help="Batch size (default=256)")

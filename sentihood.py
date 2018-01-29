@@ -7,7 +7,7 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 
-emb_size = 300
+emb_size = 50
 labels = {'Negative': 0, 'Positive': 1}
 
 
@@ -59,13 +59,13 @@ def init_word_embeddings(word2idx):
     weight = np.random.normal(0, 0.05, [len(word2idx), emb_size])
     shot_count = 0
     print('<--loading pre-trained word vectors...-->')
-    # with open('data/glove.6B.300d.txt', 'r') as f:
-    #     lines = f.readlines()
-    #     for line in tqdm(lines):
-    #         content = line.strip().split()
-    #         if content[0] in word2idx:
-    #             weight[word2idx[content[0]]] = np.array(list(map(float, content[1:])))
-    #             shot_count += 1
+    with open('data/glove/glove.6B.50d.txt', 'r') as f:
+        lines = f.readlines()
+        for line in tqdm(lines):
+            content = line.strip().split()
+            if content[0] in word2idx:
+                weight[word2idx[content[0]]] = np.array(list(map(float, content[1:])))
+                shot_count += 1
 
     print('<--Missing {}/{} words!-->'.format(len(word2idx) - shot_count, len(word2idx)))
     return weight
