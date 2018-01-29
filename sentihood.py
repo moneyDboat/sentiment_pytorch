@@ -5,7 +5,6 @@ from collections import Counter
 from models.data_model import SentiData
 import pickle
 import numpy as np
-
 from tqdm import tqdm
 
 emb_size = 300

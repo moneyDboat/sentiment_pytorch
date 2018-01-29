@@ -1,7 +1,7 @@
 import pickle
 import argparse
 from collections import Counter
-
+import random
 from sklearn.metrics import accuracy_score
 
 from models.rnn import BasicRNN
@@ -11,7 +11,6 @@ from torch import optim
 from torch import nn
 import time
 import numpy as np
-from models.data_model import SentiData
 
 # 参数配置
 parser = argparse.ArgumentParser()
@@ -54,7 +53,7 @@ def train(data):
     print("<---Starting training--->")
     for epoch in range(1, args.epochs + 1):
         t0 = time.clock()
-        # random.shuffle(self.train_data)
+        # random.shuffle(data)
         print("========================================================================")
         losses = []
 
@@ -66,7 +65,8 @@ def train(data):
             losses.append(loss)
 
         t1 = time.clock()
-        print("[Epoch {}] Train Loss={} T={}s".format(epoch, np.mean(losses), t1 - t0))
+        mean_loss = np.mean(losses)
+        print("[Epoch {}] Train Loss={} T={}s".format(epoch, mean_loss, t1 - t0))
 
 
 def train_batch(data, i):
@@ -121,8 +121,10 @@ def evaluate(data):
     sentence, sources, actual_batch = make_batch(test_data, -1, args.batch_size, args.cuda)
     output, hidden = model.forward(sentence, hidden)
     loss = criterion(output, sources)
-    print("Test loss={}".format(loss[0]))
+    print("Test loss={}".format(loss.data[0]))
     accuracy = get_accuracy(output, sources)
+
+    return accuracy
 
 
 def get_accuracy(output, sources):
@@ -156,12 +158,17 @@ data = pickle.load(open('preprocess/{}/data.pkl'.format(args.dataset), 'rb'))
 source_w2i, source_w2i, train_data, test_data, glove_weight = data['source_w2i'], data['source_w2i'], \
                                                               data['train'], data['test'], data['embedding']
 
+# Set the random seed manually for reproducibility.
+torch.manual_seed(args.seed)
 model = BasicRNN(args, len(source_w2i), pretrained=glove_weight)
 print(model)
 if args.cuda:
+    torch.cuda.manual_seed(args.seed)
     model.cuda()
+np.random.seed(args.seed)
+random.seed(args.seed)
 criterion = nn.CrossEntropyLoss()
 optimizer = select_optimizer()
 
 train(train_data)
-evaluate(test_data)
+acc = evaluate(test_data)
