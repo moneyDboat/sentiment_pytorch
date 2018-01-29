@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', dest='dataset', type=str, metavar='<str>', default='Restaurants',
                     help="Dataset (Laptop/Restaurants) (default=Restaurants)")
 parser.add_argument("--mode", dest="mode", type=str, metavar='<str>', default='term',
-                    help="Experiment Mode (term|aspect) (default=term)")
+                    help="Experiment Mode (term|source) (default=term)")
 parser.add_argument("--mdl", dest="model_type", type=str, metavar='<str>', default='RNN',
                     help="(RNN|TD-RNN|ATT-RNN)")
 parser.add_argument("--opt", dest="opt", type=str, metavar='<str>', default='Adam',
@@ -48,7 +48,7 @@ args = parser.parse_args()
 
 
 def train(data):
-    num_batches = int(len(data.source) / args.batch_size) + 1
+    num_batches = int(len(data) / args.batch_size) + 1
     select_optimizer()
 
     print("<---Starting training--->")
@@ -71,13 +71,13 @@ def train(data):
 
 def train_batch(data, i):
     # Trains a regular RNN model
-    sentences, targets, actual_batch = make_batch(data, i, args.batch_size, args.cuda)
+    sentences, sources, actual_batch = make_batch(data, i, args.batch_size, args.cuda)
 
     hidden = model.init_hidden(actual_batch)
     hidden = model.repackage_hidden(hidden)
     model.zero_grad()
     output, hidden = model.forward(sentences, hidden)
-    loss = criterion(output, targets)
+    loss = criterion(output, sources)
     loss.backward()
     optimizer.step()
     return loss.data[0]
@@ -87,13 +87,12 @@ def make_batch(data, i, batch_size, cuda):
     # -1 to take all
     if (i >= 0):
         start, end = i * batch_size, (i + 1) * batch_size
-        batch = SentiData(data.source[start:end, :], data.location[start:end], data.target[start:end],
-                          data.label[start:end])
+        batch = data[start:end]
     else:
         batch = data
 
-    sentences = torch.LongTensor(batch.source).transpose(0, 1)
-    labels = torch.LongTensor(batch.label.tolist())
+    sentences = torch.LongTensor(pad_to_batch_max([item.source for item in batch])).transpose(0, 1)
+    labels = torch.LongTensor(np.array([item.label for item in batch]))
 
     actual_batch = sentences.size(1)
     if (cuda):
@@ -105,23 +104,34 @@ def make_batch(data, i, batch_size, cuda):
     return sentences, labels, actual_batch
 
 
+def pad_to_batch_max(text_data):
+    max_len = max([len(item) for item in text_data])
+    pad_data = np.zeros([len(text_data), max_len], dtype=int)
+
+    for i in range(len(text_data)):
+        for j in range(len(text_data[i])):
+            pad_data[i][j] = text_data[i][j]
+
+    return pad_data
+
+
 def evaluate(data):
     # Evaluates normal RNN model
-    hidden = model.init_hidden(len(test_data.source))
-    sentence, targets, actual_batch = make_batch(test_data, -1, args.batch_size, args.cuda)
+    hidden = model.init_hidden(len(test_data))
+    sentence, sources, actual_batch = make_batch(test_data, -1, args.batch_size, args.cuda)
     output, hidden = model.forward(sentence, hidden)
-    loss = criterion(output, targets)
+    loss = criterion(output, sources)
     print("Test loss={}".format(loss[0]))
-    accuracy = get_accuracy(output, targets)
+    accuracy = get_accuracy(output, sources)
 
 
-def get_accuracy(output, targets):
+def get_accuracy(output, sources):
     output = output.data.cpu().numpy()  # （1120,3）
-    targets = targets.data.cpu().numpy()
+    sources = sources.data.cpu().numpy()
     output = np.argmax(output, axis=1)  # (1120,1)
     dist = dict(Counter(output))
     print("Output Distribution={}".format(dist))
-    acc = accuracy_score(targets, output)
+    acc = accuracy_score(sources, output)
     print("Accuracy={}".format(acc))
     return acc
 
@@ -143,7 +153,7 @@ def select_optimizer():
 
 args.dataset = 'sentihood'
 data = pickle.load(open('preprocess/{}/data.pkl'.format(args.dataset), 'rb'))
-source_w2i, target_w2i, train_data, test_data, glove_weight = data['source_w2i'], data['target_w2i'], \
+source_w2i, source_w2i, train_data, test_data, glove_weight = data['source_w2i'], data['source_w2i'], \
                                                               data['train'], data['test'], data['embedding']
 
 model = BasicRNN(args, len(source_w2i), pretrained=glove_weight)

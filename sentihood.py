@@ -13,9 +13,9 @@ labels = {'Negative': 0, 'Positive': 1}
 
 
 def build_vocab(*fpaths):
-    source_count, target_count = [], []
-    source_word2idx, target_word2idx = {}, {}
-    source_words, target_words = [], []
+    source_count, aspect_count = [], []
+    source_w2i, aspect_w2i = {}, {}
+    source_words, aspect_words = [], []
     source_count.append(['<pad>', 0])
 
     for fpath in fpaths:
@@ -31,29 +31,29 @@ def build_vocab(*fpaths):
                 source_words.extend(text.strip().split())
                 opinions = item['opinions']
                 for opinion in opinions:
-                    target_words.append(opinion['aspect'].lower())
+                    aspect_words.append(opinion['aspect'].lower())
 
     source_count.extend(Counter(source_words).most_common())
-    target_count.extend(Counter(target_words).most_common())
+    aspect_count.extend(Counter(aspect_words).most_common())
 
     # 单词转换成索引，word2index
     # 最常出现的词会在前面
     for word, _ in source_count:
-        if word not in source_word2idx:
-            source_word2idx[word] = len(source_word2idx)
-    for word, _ in target_count:
-        if word not in target_word2idx:
-            target_word2idx[word] = len(target_word2idx)
+        if word not in source_w2i:
+            source_w2i[word] = len(source_w2i)
+    for word, _ in aspect_count:
+        if word not in aspect_w2i:
+            aspect_w2i[word] = len(aspect_w2i)
 
     # 写入文件
     with open(file_path + 'source_w2i.txt', 'wt') as f:
-        for key, val in source_word2idx.items():
+        for key, val in source_w2i.items():
             f.write('\"{}\" : {}\n'.format(key, val))
-    with open(file_path + 'target_w2i.txt', 'wt') as f:
-        for key, val in target_word2idx.items():
+    with open(file_path + 'aspect_w2i.txt', 'wt') as f:
+        for key, val in aspect_w2i.items():
             f.write('\"{}\" : {}\n'.format(key, val))
 
-    return source_word2idx, target_word2idx
+    return source_w2i, aspect_w2i
 
 
 def init_word_embeddings(word2idx):
@@ -68,13 +68,12 @@ def init_word_embeddings(word2idx):
     return weight
 
 
-def load_data(fpath, data_type, source_word2idx, target_word2idx):
+def load_data(fpath, data_type, source_w2i, aspect_w2i):
     if os.path.isfile(fpath) is False:
         raise ("[!] Data %s not found" % fpath)
 
     raw_sentence = []
-    all_data = {}
-    source_data, loc_data, target_data, target_label = [], [], [], []
+    source_data, loc_data, aspect_data, aspect_label = [], [], [], []
 
     with open(fpath, 'r') as f:
         data = json.load(f)
@@ -84,38 +83,31 @@ def load_data(fpath, data_type, source_word2idx, target_word2idx):
             raw_sentence.append(text)
             sentence_idx = []
             for word in text.split():
-                sentence_idx.append(source_word2idx[word])
+                sentence_idx.append(source_w2i[word])
 
             for opinion in item['opinions']:
                 label = labels[opinion['sentiment']]
-                target_label.append(label)
+                aspect_label.append(label)
                 source_data.append(sentence_idx)
-                target_data.append(target_word2idx[opinion['aspect'].lower()])
+                aspect_data.append(aspect_w2i[opinion['aspect'].lower()])
 
     # 写入文件
     print("<--Read %s aspects from %s-->" % (len(source_data), fpath))
-    source_data = pad_to_batch_max(source_data)
-    target_data, target_label = np.array(target_data, dtype=int), np.array(target_label, dtype=int)
+    # source_data = pad_to_batch_max(source_data)
+    aspect_data, aspect_label = np.array(aspect_data, dtype=int), np.array(aspect_label, dtype=int)
     save_path = file_path + data_type
     with open(save_path + '/raw_sentence.txt', 'w') as f:
         for item in raw_sentence:
             f.write(item + '\n')
-    np.savetxt(save_path + '/aspects.txt', target_data, fmt='%i')
-    np.savetxt(save_path + '/labels.txt', target_label, fmt='%i')
+    np.savetxt(save_path + '/aspects.txt', aspect_data, fmt='%i')
+    np.savetxt(save_path + '/labels.txt', aspect_label, fmt='%i')
 
-    all_data = SentiData(source_data, loc_data, target_data, target_label)
+    all_data = []
+    for i in range(len(source_data)):
+        all_data.append(SentiData(source_data[i], None, aspect_data[i], aspect_label[i]))
+
+    all_data = all_data
     return all_data
-
-
-def pad_to_batch_max(data):
-    max_len = max([len(item) for item in data], )
-    pad_data = np.zeros([len(data), max_len], dtype=int)
-
-    for i in range(len(data)):
-        for j in range(len(data[i])):
-            pad_data[i][j] = data[i][j]
-
-    return pad_data
 
 
 file_path = 'preprocess/sentihood/'
@@ -128,9 +120,9 @@ train_data_path = 'data/sentihood-train.json'
 dev_data_path = 'data/sentihood-dev.json'
 test_data_path = 'data/sentihood-test.json'
 
-source_word2idx, target_word2idx = build_vocab(train_data_path, dev_data_path, test_data_path)
-train_data = load_data(train_data_path, 'train', source_word2idx, target_word2idx)
-test_data = load_data(test_data_path, 'test', source_word2idx, target_word2idx)
+source_word2idx, aspect_word2idx = build_vocab(train_data_path, dev_data_path, test_data_path)
+train_data = load_data(train_data_path, 'train', source_word2idx, aspect_word2idx)
+test_data = load_data(test_data_path, 'test', source_word2idx, aspect_word2idx)
 
 embeddings = init_word_embeddings(source_word2idx)
 # 保存预处理数据
@@ -139,5 +131,5 @@ preprocess_data['embedding'] = embeddings
 preprocess_data['train'] = train_data
 preprocess_data['test'] = test_data
 preprocess_data['source_w2i'] = source_word2idx
-preprocess_data['target_w2i'] = target_word2idx
+preprocess_data['aspect_w2i'] = aspect_word2idx
 pickle.dump(preprocess_data, open(file_path + 'data.pkl', 'wb'))
