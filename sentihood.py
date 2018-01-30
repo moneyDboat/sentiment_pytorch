@@ -6,8 +6,9 @@ from models.data_model import SentiData
 import pickle
 import numpy as np
 from tqdm import tqdm
+import re
 
-emb_size = 50
+emb_size = 200
 labels = {'Negative': 0, 'Positive': 1}
 
 
@@ -26,8 +27,8 @@ def build_vocab(*fpaths):
         with open(fpath, 'r') as f:
             data = json.load(f)
             for item in data:
-                text = item['text'].lower()
-                source_words.extend(text.strip().split())
+                text = clean_text(item['text'])
+                source_words.extend(text.split())
                 opinions = item['opinions']
                 for opinion in opinions:
                     aspect_words.append(opinion['aspect'].lower())
@@ -55,19 +56,30 @@ def build_vocab(*fpaths):
     return source_w2i, aspect_w2i
 
 
+def clean_text(text):
+    text = text.strip().lower()
+    # text = re.sub('[-,.():/`;0123456789]+', '', text)
+    text = re.sub('[^a-z]+', ' ', text)
+
+    return text
+
+
 def init_word_embeddings(word2idx):
     weight = np.random.normal(0, 0.05, [len(word2idx), emb_size])
-    shot_count = 0
     print('<--loading pre-trained word vectors...-->')
-    with open('data/glove/glove.6B.50d.txt', 'r') as f:
+    with open('data/glove/glove.twitter.27B.{}d.txt'.format(emb_size), 'r') as f:
+        word2idx_miss = word2idx.copy()
         lines = f.readlines()
         for line in tqdm(lines):
             content = line.strip().split()
             if content[0] in word2idx:
+                word2idx_miss.pop(content[0])
                 weight[word2idx[content[0]]] = np.array(list(map(float, content[1:])))
-                shot_count += 1
 
-    print('<--Missing {}/{} words!-->'.format(len(word2idx) - shot_count, len(word2idx)))
+    print('<--Missing {}/{} words!-->'.format(len(word2idx_miss), len(word2idx)))
+    with open(file_path + 'missing_words.txt', 'w') as f:
+        for k, v in word2idx_miss.items():
+            f.write("{} : {}\n".format(k, v))
     return weight
 
 
@@ -82,7 +94,7 @@ def load_data(fpath, data_type, source_w2i, aspect_w2i):
         data = json.load(f)
 
         for item in data:
-            text = item['text'].strip().lower()
+            text = clean_text(item['text'])
             raw_sentence.append(text)
             sentence_idx = []
             for word in text.split():
@@ -96,7 +108,6 @@ def load_data(fpath, data_type, source_w2i, aspect_w2i):
 
     # 写入文件
     print("<--Read %s aspects from %s-->" % (len(source_data), fpath))
-    # source_data = pad_to_batch_max(source_data)
     aspect_data, aspect_label = np.array(aspect_data, dtype=int), np.array(aspect_label, dtype=int)
     save_path = file_path + data_type
     with open(save_path + '/raw_sentence.txt', 'w') as f:
@@ -118,6 +129,7 @@ if os.path.isdir(file_path):
     shutil.rmtree(file_path)
 os.makedirs(file_path + 'train/')
 os.makedirs(file_path + 'test/')
+os.makedirs(file_path + 'dev/')
 
 train_data_path = 'data/sentihood-train.json'
 dev_data_path = 'data/sentihood-dev.json'
@@ -125,6 +137,7 @@ test_data_path = 'data/sentihood-test.json'
 
 source_word2idx, aspect_word2idx = build_vocab(train_data_path, dev_data_path, test_data_path)
 train_data = load_data(train_data_path, 'train', source_word2idx, aspect_word2idx)
+dev_data = load_data(dev_data_path, 'dev', source_word2idx, aspect_word2idx)
 test_data = load_data(test_data_path, 'test', source_word2idx, aspect_word2idx)
 
 embeddings = init_word_embeddings(source_word2idx)
@@ -132,6 +145,7 @@ embeddings = init_word_embeddings(source_word2idx)
 preprocess_data = dict()
 preprocess_data['embedding'] = embeddings
 preprocess_data['train'] = train_data
+preprocess_data['dev'] = dev_data
 preprocess_data['test'] = test_data
 preprocess_data['source_w2i'] = source_word2idx
 preprocess_data['aspect_w2i'] = aspect_word2idx

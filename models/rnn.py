@@ -49,10 +49,6 @@ class BasicRNN(nn.Module):
         self.decoder.bias.data.fill_(0)
         self.decoder.weight.data.uniform_(-initrange, initrange)
 
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        return Variable(weight.new(self.args.rnn_layers, bsz, self.args.rnn_size).zero_())
-
     def repackage_hidden(self, h):
         """Wraps hidden states in new Variables, to detach them from their history."""
         # What's this?
@@ -61,10 +57,10 @@ class BasicRNN(nn.Module):
         else:
             return tuple(self.repackage_hidden(v) for v in h)
 
-    # def init_hidden(self, bsz):
-    #     weight = next(self.parameters()).data
-    #     if (self.args.rnn_type == 'LSTM'):
-    #         return (Variable(weight.new(self.args.rnn_layers, bsz, self.args.rnn_size).zero_()),
-    #                 Variable(weight.new(self.args.rnn_layers, bsz, self.args.rnn_size).zero_()))
-    #     else:
-    #         return Variable(weight.new(self.args.rnn_layers, bsz, self.args.rnn_size).zero_()
+    def init_hidden(self, bsz):
+        weight = next(self.parameters()).data
+        if (self.args.rnn_type == 'LSTM'):
+            return (Variable(weight.new(self.args.rnn_layers, bsz, self.args.rnn_size).zero_()),
+                    Variable(weight.new(self.args.rnn_layers, bsz, self.args.rnn_size).zero_()))
+        else:
+            return Variable(weight.new(self.args.rnn_layers, bsz, self.args.rnn_size).zero_())

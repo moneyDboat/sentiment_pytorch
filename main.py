@@ -7,6 +7,8 @@ import torch
 from torch.autograd import Variable
 from torch import optim
 from torch import nn
+import random
+import copy
 import time
 import numpy as np
 
@@ -28,7 +30,7 @@ parser.add_argument("--rnn_size", dest="rnn_size", type=int, metavar='<int>', de
                     help="RNN dimension. '0' means no RNN layer (default=300)")
 parser.add_argument("--rnn_layers", dest="rnn_layers", type=int, metavar='<int>', default=1,
                     help="Number of RNN layers")
-parser.add_argument("--emb_size", dest="emb_size", type=int, metavar='<int>', default=50,
+parser.add_argument("--emb_size", dest="emb_size", type=int, metavar='<int>', default=200,
                     help="Embeddings dimension (default=300)")
 parser.add_argument("--batch_size", dest="batch_size", type=int, metavar='<int>', default=256,
                     help="Batch size (default=256)")
@@ -49,6 +51,7 @@ def train(data):
     select_optimizer()
 
     print("<---Starting training--->")
+    best_dev_acc = 0
     for epoch in range(1, args.epochs + 1):
         t0 = time.clock()
         # random.shuffle(data)
@@ -61,10 +64,18 @@ def train(data):
                 continue
             losses.append(loss)
 
+        dev_acc = evaluate(dev_data, False)
+        if dev_acc > best_dev_acc:
+            best_model = copy.deepcopy(model)
+            best_dev_acc = dev_acc
+            print('best dev acc now : {}'.format(best_dev_acc))
+
         t1 = time.clock()
         mean_loss = np.mean(losses)
         if epoch % 5 == 0:
             print("[Epoch {}] Train Loss={} T={}s".format(epoch, mean_loss, t1 - t0))
+
+    return best_model
 
 
 def train_batch(data, i):
@@ -113,26 +124,28 @@ def pad_to_batch_max(text_data):
     return pad_data
 
 
-def evaluate(data):
+def evaluate(data, if_test=True):
     # Evaluates normal RNN model
     hidden = model.init_hidden(len(test_data))
     sentence, sources, actual_batch = make_batch(test_data, -1, args.batch_size, args.cuda)
     output, hidden = model.forward(sentence, hidden)
     loss = criterion(output, sources)
-    print("Test loss={}".format(loss.data[0]))
-    accuracy = get_accuracy(output, sources)
+    if if_test:
+        print("Test loss={}".format(loss.data[0]))
+    accuracy = get_accuracy(output, sources, if_test)
 
     return accuracy
 
 
-def get_accuracy(output, sources):
+def get_accuracy(output, sources, if_test):
     output = output.data.cpu().numpy()  # （1120,3）
     sources = sources.data.cpu().numpy()
     output = np.argmax(output, axis=1)  # (1120,1)
     dist = dict(Counter(output))
-    print("Output Distribution={}".format(dist))
     acc = accuracy_score(sources, output)
-    print("Accuracy={}".format(acc))
+    if if_test:
+        print("Output Distribution={}".format(dist))
+        print("Accuracy={}".format(acc))
     return acc
 
 
@@ -153,8 +166,9 @@ def select_optimizer():
 
 args.dataset = 'sentihood'
 data = pickle.load(open('preprocess/{}/data.pkl'.format(args.dataset), 'rb'))
-source_w2i, source_w2i, train_data, test_data, glove_weight = data['source_w2i'], data['source_w2i'], \
-                                                              data['train'], data['test'], data['embedding']
+source_w2i, source_w2i, train_data, dev_data, test_data, glove_weight = data['source_w2i'], data['source_w2i'], \
+                                                                        data['train'], data['dev'], data['test'], \
+                                                                        data['embedding']
 
 acc_list = []
 t1 = time.clock()
@@ -170,7 +184,8 @@ for i in range(10):
     criterion = nn.CrossEntropyLoss()
     optimizer = select_optimizer()
 
-    train(train_data)
+    best_model = train(train_data)
+    model = best_model
     acc_list.append(evaluate(test_data))
 t2 = time.clock()
 print('\n\n<--Totla training time : {}s-->'.format(t2 - t1))
