@@ -124,6 +124,10 @@ def load_data(fpath, data_type, source_w2i, aspect_w2i):
     return all_data
 
 
+def get_pos_info():
+    pass
+
+
 file_path = 'preprocess/sentihood/'
 if os.path.isdir(file_path):
     shutil.rmtree(file_path)

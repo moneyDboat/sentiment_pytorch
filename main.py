@@ -32,6 +32,8 @@ parser.add_argument("--rnn_layers", dest="rnn_layers", type=int, metavar='<int>'
                     help="Number of RNN layers")
 parser.add_argument("--emb_size", dest="emb_size", type=int, metavar='<int>', default=200,
                     help="Embeddings dimension (default=300)")
+parser.add_argument("--attention_width", dest="attention_width", type=int, metavar='<int>', default=5,
+                    help="Width of attention (default=5)")
 parser.add_argument("--batch_size", dest="batch_size", type=int, metavar='<int>', default=256,
                     help="Batch size (default=256)")
 parser.add_argument("--pretrained", dest="pretrained", type=int, metavar='<int>', default=1,
@@ -124,10 +126,10 @@ def pad_to_batch_max(text_data):
     return pad_data
 
 
-def evaluate(data, if_test=True):
+def evaluate(eva_data, if_test=True):
     # Evaluates normal RNN model
-    hidden = model.init_hidden(len(test_data))
-    sentence, sources, actual_batch = make_batch(test_data, -1, args.batch_size, args.cuda)
+    hidden = model.init_hidden(len(eva_data))
+    sentence, sources, actual_batch = make_batch(eva_data, -1, args.batch_size, args.cuda)
     output, hidden = model.forward(sentence, hidden)
     loss = criterion(output, sources)
     if if_test:
@@ -186,6 +188,7 @@ for i in range(10):
 
     best_model = train(train_data)
     model = best_model
+    evaluate(train_data)
     acc_list.append(evaluate(test_data))
 t2 = time.clock()
 print('\n\n<--Totla training time : {}s-->'.format(t2 - t1))

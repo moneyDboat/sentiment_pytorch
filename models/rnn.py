@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
+from models.attention import AttentionLayer
 
 
 class BasicRNN(nn.Module):
@@ -15,8 +16,9 @@ class BasicRNN(nn.Module):
         # rnn_size is the size of hidden state in RNN
         self.rnn = getattr(nn, self.args.rnn_type)(self.args.emb_size, self.args.rnn_size, self.args.rnn_layers,
                                                    bias=False)
+        if 'ATT' in self.args.model_type:
+            self.attention = AttentionLayer(self.args.rnn_size)
         self.decoder = nn.Linear(self.args.rnn_size, 3)
-        # self.softmax = nn.LogSoftmax()
 
         self.init_weights(pretrained=pretrained)
         print("<--Initialized {} model-->".format(self.args.rnn_type))
@@ -24,12 +26,10 @@ class BasicRNN(nn.Module):
     def forward(self, input, hidden):
         emb = self.embed(input)
         output, hidden = self.rnn(emb, hidden)
+        # Attention Layer
+        if ('ATT' in self.args.model_type):
+            output = self.attention(output, attention_width=self.args.attention_width)
         output = torch.mean(output, 0)
-
-        # # Attention Layer
-        # if ('ATT' in self.args.model_type):
-        #     output = self.AttentionLayer(output, attention_width=self.args.attention_width)
-
         output = torch.squeeze(output)
         decoded = self.decoder(output)
         # decoded = self.softmax(decoded)
