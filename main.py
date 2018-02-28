@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+
 import pickle
 import argparse
 from collections import Counter
@@ -174,7 +176,7 @@ source_w2i, source_w2i, train_data, dev_data, test_data, glove_weight = data['so
 
 acc_list = []
 t1 = time.clock()
-for i in range(10):
+for i in range(1):
     # Set the random seed manually for reproducibility.
     print('\n\n<--{} Model start!!!-->'.format(i))
     torch.manual_seed(args.seed + i)
