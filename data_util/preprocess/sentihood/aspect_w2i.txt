@@ -1,0 +1,12 @@
+"general" : 0
+"price" : 1
+"transit-location" : 2
+"safety" : 3
+"live" : 4
+"nightlife" : 5
+"shopping" : 6
+"multicultural" : 7
+"green-nature" : 8
+"dining" : 9
+"quiet" : 10
+"touristy" : 11

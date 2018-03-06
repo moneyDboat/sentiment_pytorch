@@ -4,12 +4,11 @@ import pickle
 import argparse
 from collections import Counter
 from sklearn.metrics import accuracy_score
-from models.rnn import BasicRNN
+from TextRNN.rnn import BasicRNN
 import torch
 from torch.autograd import Variable
 from torch import optim
 from torch import nn
-import random
 import copy
 import time
 import numpy as np

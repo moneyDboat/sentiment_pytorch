@@ -1,4 +1,4 @@
-data/glove/glove*.txt
-preprocess
+data_util/data/glove/glove*.txt
+data_util/data/preprocess
 .idea/
 *.pyc
